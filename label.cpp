@@ -1,3 +1,13 @@
+#include <iostream>
+#include <opencv2/videoio.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/dnn.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/core/utils/trace.hpp>
+#include <dirent.h>
+#include <fstream>
+
 std::string dir_path =  "/home/dzkamarouski/trainset/" ;
 std::string file = "labels1.txt";
 std::string full_path = dir_path + file;
