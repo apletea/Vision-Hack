@@ -1,2 +1,3 @@
 # Vision-Hack
+Model for NN is changed and optimized VGG
 ![Alt text](https://github.com/apletea/Vision-Hack/blob/master/Neural_Net/index.png)
