@@ -2,7 +2,13 @@ from __future__ import print_function
 import caffe
 from caffe.model_libs import *
 from google.protobuf import text_format
-
+from lego.ssd import MBoxUnitLego, MBoxAssembleLego
+from lego.base import BaseLegoFunction
+from imagenet import MobileNet
+from caffe.proto import caffe_pb2
+import google.protobuf as pb
+from caffe import layers as L
+from caffe import params as P
 import math
 import os
 import shutil
@@ -20,27 +26,17 @@ def AddExtraLayers(net, use_batchnorm=True, lr_mult=1):
 
     # TODO(weiliu89): Construct the name using the last layer to avoid duplication.
     # 10 x 10
-    out_layer = "conv6_1"
+    out_layer = "conv7_1"
+    #                                                               out,k_si,pad,stride
     ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 256, 1, 0, 1,
         lr_mult=lr_mult)
 
     from_layer = out_layer
-    out_layer = "conv6_2"
+    out_layer = "conv7_2"
     ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 512, 3, 1, 2,
         lr_mult=lr_mult)
 
     # 5 x 5
-    from_layer = out_layer
-    out_layer = "conv7_1"
-    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 128, 1, 0, 1,
-      lr_mult=lr_mult)
-
-    from_layer = out_layer
-    out_layer = "conv7_2"
-    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 256, 3, 1, 2,
-      lr_mult=lr_mult)
-
-    # 3 x 3
     from_layer = out_layer
     out_layer = "conv8_1"
     ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 128, 1, 0, 1,
@@ -48,10 +44,10 @@ def AddExtraLayers(net, use_batchnorm=True, lr_mult=1):
 
     from_layer = out_layer
     out_layer = "conv8_2"
-    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 256, 3, 0, 1,
+    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 256, 3, 1, 2,
       lr_mult=lr_mult)
 
-    # 1 x 1
+    # 3 x 3
     from_layer = out_layer
     out_layer = "conv9_1"
     ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 128, 1, 0, 1,
@@ -61,6 +57,18 @@ def AddExtraLayers(net, use_batchnorm=True, lr_mult=1):
     out_layer = "conv9_2"
     ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 256, 3, 0, 1,
       lr_mult=lr_mult)
+
+    # 1 x 1
+    from_layer = out_layer
+    out_layer = "conv10_1"
+    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 128, 1, 0, 1,
+      lr_mult=lr_mult)
+
+    from_layer = out_layer
+    out_layer = "conv10_2"
+    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 256, 3, 0, 1,
+      lr_mult=lr_mult)
+
 
     return net
 
@@ -174,9 +182,7 @@ batch_sampler = [
         ]
 train_transform_param = {
         'mirror': True,
-        #'mean_value': [104, 117, 123],
         'mean_value': [128],
-        'force_gray' : True,
         'resize_param': {
                 'prob': 1,
                 'resize_mode': P.Resize.WARP,
@@ -212,9 +218,7 @@ train_transform_param = {
             }
         }
 test_transform_param = {
-        #'mean_value': [104, 117, 123],
         'mean_value': [128],
-        'force_gray' : True,
         'resize_param': {
                 'prob': 1,
                 'resize_mode': P.Resize.WARP,
@@ -238,14 +242,14 @@ else:
 # Modify the job name if you want.
 job_name = "SSD_{}".format(resize)
 # The name of the model. Modify it if you want.
-model_name = "VGG_VOC0712_{}".format(job_name)
+model_name = "Mobile_VOC0712_{}".format(job_name)
 
 # Directory which stores the model .prototxt file.
-save_dir = "models/VGGNet/VOC0712/{}".format(job_name)
+save_dir = "models/MobileNet/VOC0712/{}".format(job_name)
 # Directory which stores the snapshot of models.
-snapshot_dir = "models/VGGNet/VOC0712/{}".format(job_name)
+snapshot_dir = "models/MobileNet/VOC0712/{}".format(job_name)
 # Directory which stores the job script and log file.
-job_dir = "jobs/VGGNet/VOC0712/{}".format(job_name)
+job_dir = "jobs/MobileNet/VOC0712/{}".format(job_name)
 # Directory which stores the detection results.
 output_result_dir = "{}/data/VOCdevkit/results/VOC2007/{}/Main".format(os.environ['HOME'], job_name)
 
@@ -262,7 +266,6 @@ job_file = "{}/{}.sh".format(job_dir, model_name)
 # Stores the test image names and sizes. Created by data/VOC0712/create_list.sh
 name_size_file = "data/VOC0712/test_name_size.txt"
 # The pretrained model. We use the Fully convolutional reduced (atrous) VGGNet.
-#pretrain_model = "models/VGGNet/VGG_ILSVRC_16_layers_fc_reduced.caffemodel"
 pretrain_model = ""
 # Stores LabelMapItem.
 label_map_file = "data/VOC0712/labelmap_voc.prototxt"
@@ -308,7 +311,7 @@ min_dim = 300
 # conv7_2 ==> 5 x 5
 # conv8_2 ==> 3 x 3
 # conv9_2 ==> 1 x 1
-mbox_source_layers = ['conv4_3', 'fc7', 'conv6_2', 'conv7_2', 'conv8_2', 'conv9_2']
+mbox_source_layers = ['conv_4_3', 'fc7', 'conv7_2', 'conv8_2', 'conv9_2', 'conv10_2']
 # in percent %
 min_ratio = 20
 max_ratio = 90
@@ -332,7 +335,7 @@ else:
 flip = True
 clip = False
 
-# Solver parameters.
+# Solver parameters.gpu
 # Defining which GPUs to use.
 gpus = "0,1"
 gpulist = gpus.split(",")
@@ -372,12 +375,12 @@ solver_param = {
     'base_lr': base_lr,
     'weight_decay': 0.0005,
     'lr_policy': "multistep",
-    'stepvalue': [180000, 220000, 230000],
+    'stepvalue': [80000, 100000, 120000],
     'gamma': 0.1,
     'momentum': 0.9,
     'iter_size': iter_size,
-    'max_iter': 400000,
-    'snapshot': 10000,
+    'max_iter': 120000,
+    'snapshot': 80000,
     'display': 10,
     'average_loss': 10,
     'type': "SGD",
@@ -387,7 +390,7 @@ solver_param = {
     'snapshot_after_train': True,
     # Test parameters
     'test_iter': [test_iter],
-    'test_interval': 1000,
+    'test_interval': 10000,
     'eval_type': "detection",
     'ap_version': "11point",
     'test_initialization': False,
@@ -433,12 +436,7 @@ make_if_not_exist(snapshot_dir)
 
 # Create train net.
 net = caffe.NetSpec()
-net.data, net.label = CreateAnnotatedDataLayer(train_data, batch_size=batch_size_per_device,
-        train=True, output_label=True, label_map_file=label_map_file,
-        transform_param=train_transform_param, batch_sampler=batch_sampler)
-
-VGGNetBody(net, from_layer='data', fully_conv=True, reduced=True, dilated=True,
-    dropout=False)
+net = MobileNet().stitch(netspec=net, train=True)
 
 AddExtraLayers(net, use_batchnorm, lr_mult=lr_mult)
 
@@ -462,12 +460,7 @@ shutil.copy(train_net_file, job_dir)
 
 # Create test net.
 net = caffe.NetSpec()
-net.data, net.label = CreateAnnotatedDataLayer(test_data, batch_size=test_batch_size,
-        train=False, output_label=True, label_map_file=label_map_file,
-        transform_param=test_transform_param)
-
-VGGNetBody(net, from_layer='data', fully_conv=True, reduced=True, dilated=True,
-    dropout=False)
+net = MobileNet().stitch(netspec=net, train=False)
 
 AddExtraLayers(net, use_batchnorm, lr_mult=lr_mult)
 
