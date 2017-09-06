@@ -174,7 +174,9 @@ batch_sampler = [
         ]
 train_transform_param = {
         'mirror': True,
-        'mean_value': [104, 117, 123],
+        #'mean_value': [104, 117, 123],
+        'mean_value': [128],
+        'force_gray' : True,
         'resize_param': {
                 'prob': 1,
                 'resize_mode': P.Resize.WARP,
@@ -210,7 +212,9 @@ train_transform_param = {
             }
         }
 test_transform_param = {
-        'mean_value': [104, 117, 123],
+        #'mean_value': [104, 117, 123],
+        'mean_value': [128],
+        'force_gray' : True,
         'resize_param': {
                 'prob': 1,
                 'resize_mode': P.Resize.WARP,
@@ -258,6 +262,7 @@ job_file = "{}/{}.sh".format(job_dir, model_name)
 # Stores the test image names and sizes. Created by data/VOC0712/create_list.sh
 name_size_file = "data/VOC0712/test_name_size.txt"
 # The pretrained model. We use the Fully convolutional reduced (atrous) VGGNet.
+#pretrain_model = "models/VGGNet/VGG_ILSVRC_16_layers_fc_reduced.caffemodel"
 pretrain_model = ""
 # Stores LabelMapItem.
 label_map_file = "data/VOC0712/labelmap_voc.prototxt"
@@ -371,7 +376,7 @@ solver_param = {
     'gamma': 0.1,
     'momentum': 0.9,
     'iter_size': iter_size,
-    'max_iter': 260000,
+    'max_iter': 400000,
     'snapshot': 10000,
     'display': 10,
     'average_loss': 10,
@@ -382,7 +387,7 @@ solver_param = {
     'snapshot_after_train': True,
     # Test parameters
     'test_iter': [test_iter],
-    'test_interval': 300,
+    'test_interval': 1000,
     'eval_type': "detection",
     'ap_version': "11point",
     'test_initialization': False,
@@ -509,7 +514,7 @@ with open(deploy_net_file, 'w') as f:
     net_param.name = '{}_deploy'.format(model_name)
     net_param.input.extend(['data'])
     net_param.input_shape.extend([
-        caffe_pb2.BlobShape(dim=[1, 3, resize_height, resize_width])])
+        caffe_pb2.BlobShape(dim=[1, 1, resize_height, resize_width])])
     print(net_param, file=f)
 shutil.copy(deploy_net_file, job_dir)
 
